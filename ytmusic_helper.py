@@ -32,9 +32,14 @@ class YTMusicHelper():
         track_ids = []
         c = 0
         for track in tracks:
-            track_ids.append(self._find_track(track))
-            c += 1
-            print(f"found {c} songs", end="\r")
+            track_id = self._find_track(track)
+            if track_id is not None:
+                track_ids.append(track_id)
+                c += 1
+                print(f"found {c} songs", end="\r")
+            else:
+                print(f"no matching version found for {track}")
+
         print(f"found {c} songs")
 
         # reverse to have newest songs at the top
@@ -53,7 +58,6 @@ class YTMusicHelper():
         results_with_dist = []
         for res in results:
             if res is None or "album" not in res.keys() or res["album"] is None or "name" not in res["album"]:
-                print(res)
                 continue
 
             title_dist = Levenshtein.distance(res["title"], track.title)
@@ -74,5 +78,12 @@ class YTMusicHelper():
 
             results_with_dist.append((total_dist, res["videoId"]))
 
+        if len(results_with_dist) == 0:
+            return None
+
         results_with_dist.sort(key=lambda x: x[0])
+
+        if results_with_dist[0][0] > 50:
+            return None
+
         return results_with_dist[0][1]

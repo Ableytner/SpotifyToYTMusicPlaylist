@@ -20,6 +20,9 @@ class SpotifyTrack:
     artists: list[str]
     album: str
 
+    def __str__(self) -> str:
+        return f"{', '.join(self.artists)} - {self.title}"
+
 class SpotifyHelper():
     def __init__(self, config: SectionProxy) -> None:
         self._config = config
