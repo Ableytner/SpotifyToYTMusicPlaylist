@@ -5,7 +5,7 @@ import requests
 from ytmusicapi import YTMusic
 from ytmusicapi.auth.oauth import OAuthCredentials, RefreshingToken
 
-from spotify_helper import SpotifyTrack
+from track import BaseTrack, SpotifyTrack, YtMusicTrack
 
 class YTMusicHelper():
     def __init__(self) -> None:
@@ -32,58 +32,76 @@ class YTMusicHelper():
         track_ids = []
         c = 0
         for track in tracks:
-            track_id = self._find_track(track)
-            if track_id is not None:
-                track_ids.append(track_id)
+            found_track = self._find_track(track)
+            if found_track is not None:
+                track_ids.append(found_track.video_id)
                 c += 1
                 print(f"found {c} songs", end="\r")
+                # print(f"found {found_track}")
             else:
                 print(f"no matching version found for {track}")
 
         print(f"found {c} songs")
 
+        if c == 0:
+            print("aborting...")
+            return
+
         # reverse to have newest songs at the top
         track_ids.reverse()
 
         self._ytmusic.create_playlist(name, "Playlist synchronized from Spotify", "PRIVATE", video_ids=track_ids)
-
         print(f"Created new playlist {name} with {len(track_ids)} songs")
 
     def _merge_playlists(self, playlist_id: str, tracks: list[SpotifyTrack]) -> None:
         pass
 
-    def _find_track(self, track: SpotifyTrack) -> str:
-        results = self._ytmusic.search(f"{track.title} {' '.join(track.artists)}", filter="songs", limit=10, ignore_spelling=True)
+    def _find_track(self, sp_track: SpotifyTrack) -> YtMusicTrack | None:
+        results = self._ytmusic.search(f"{sp_track.title} {' '.join(sp_track.artists)}", filter="songs", limit=10, ignore_spelling=True)
 
-        results_with_dist = []
+        closest_track = None
+        closest_track_dist = 999
         for res in results:
-            if res is None or "album" not in res.keys() or res["album"] is None or "name" not in res["album"]:
+            yt_track = YtMusicTrack.from_response(res)
+            if yt_track is None:
                 continue
 
-            title_dist = Levenshtein.distance(res["title"], track.title)
-            album_dist = Levenshtein.distance(res["album"]["name"], track.album)
+            dist = self._track_dist(yt_track, sp_track)
 
-            artist_dist = 0
-            for yt_artist in [item["name"] for item in res["artists"]]:
-                curr_artist_lowest_dist = 999
-                for sp_artist in track.artists:
-                    dist = Levenshtein.distance(yt_artist, sp_artist, weights=(1, 1, 1))
-                    if dist < curr_artist_lowest_dist:
-                        curr_artist_lowest_dist = dist
-                artist_dist += curr_artist_lowest_dist
-            
-            total_dist = title_dist * 2 \
-                         + artist_dist * 2 \
-                         + album_dist
+            if dist < closest_track_dist:
+                closest_track = yt_track
+                closest_track_dist = dist
 
-            results_with_dist.append((total_dist, res["videoId"]))
-
-        if len(results_with_dist) == 0:
+        if closest_track_dist > 30:
             return None
 
-        results_with_dist.sort(key=lambda x: x[0])
+        return closest_track
 
-        if results_with_dist[0][0] > 50:
-            return None
+    def _track_dist(self, track1: BaseTrack, track2: BaseTrack) -> int:
+        title_dist = Levenshtein.distance(track1.title, track2.title)
 
-        return results_with_dist[0][1]
+        # album distance is ignored
+        # the same song can be released as a single or part of an album
+        album_dist = 0
+
+        artist_dists = [None] * len(track1.artists)
+        for i, artist1 in enumerate(track1.artists):
+            curr_artist_lowest_dist = 999
+            for artist2 in track2.artists:
+                dist = Levenshtein.distance(artist1, artist2, weights=(1, 1, 1))
+                if dist < curr_artist_lowest_dist:
+                    curr_artist_lowest_dist = dist
+            artist_dists[i] = curr_artist_lowest_dist
+
+        # number of artists varies by more than one
+        if abs(len(track1.artists) - len(track2.artists)) > 1:
+            return 999
+
+        # number of artists varies by one
+        if len(track1.artists) != len(track2.artists) and len(artist_dists) > 1:
+            artist_dists.sort()
+            artist_dists.pop(-1)
+
+        return title_dist * 1 \
+               + sum(artist_dists) * 4 \
+               + album_dist * 1

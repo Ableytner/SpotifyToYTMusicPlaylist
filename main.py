@@ -45,12 +45,12 @@ if __name__ == "__main__":
     ytmusic_helper = YTMusicHelper()
     ytmusic_helper.authorize()
     
-    playlist_data: dict[str, list[SpotifyTrack]] = {}
+    playlist_data: list[tuple[str, list[SpotifyTrack]]] = []
     for playlist in playlists:
-        (name, tracks) = spotifyHelper.get_playlist(playlist["spotify_url"])
-        if name in playlist_data.keys():
+        name, tracks = spotifyHelper.get_playlist(playlist["spotify_url"])
+        if name in [item[0] for item in playlist_data]:
             raise Exception("Two spotify playlists with the same name detected")
-        playlist_data[name] = tracks
+        playlist_data.append((name, tracks))
 
-    for name, tracks in playlist_data.items():    
+    for name, tracks in playlist_data:    
         ytmusic_helper.add_playlist(name, tracks)

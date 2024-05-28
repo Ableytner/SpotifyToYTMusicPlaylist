@@ -14,14 +14,7 @@ from configparser import SectionProxy
 from datetime import datetime, timedelta
 from time import sleep
 
-@dataclass
-class SpotifyTrack:
-    title: str
-    artists: list[str]
-    album: str
-
-    def __str__(self) -> str:
-        return f"{', '.join(self.artists)} - {self.title}"
+from track import SpotifyTrack
 
 class SpotifyHelper():
     def __init__(self, config: SectionProxy) -> None:
@@ -63,7 +56,7 @@ class SpotifyHelper():
             "fields": "name,tracks.total"
         }
 
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, params=params)
 
         if "error" in res.json():
             raise Exception(f"received error: {res.json()}")
@@ -101,8 +94,11 @@ class SpotifyHelper():
 
         tracks = []
         for track in [item["track"] for item in res.json()["items"]]:
-            tracks.append(SpotifyTrack(track["name"], [item["name"] for item in track['artists']], track["album"]["name"]))
-        
+            try:
+                tracks.append(SpotifyTrack.from_response(track))
+            except ValueError:
+                pass
+
         return tracks
 
     def _run_http_server(self):
