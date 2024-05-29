@@ -37,6 +37,7 @@ class YTMusicHelper():
                 track_ids.append(found_track.video_id)
                 c += 1
                 print(f"found {c} songs", end="\r")
+                # print(track)
                 # print(f"found {found_track}")
             else:
                 print(f"no matching version found for {track}")
@@ -72,7 +73,7 @@ class YTMusicHelper():
                 closest_track = yt_track
                 closest_track_dist = dist
 
-        if closest_track_dist > 30:
+        if closest_track_dist > 20:
             return None
 
         return closest_track
@@ -103,5 +104,5 @@ class YTMusicHelper():
             artist_dists.pop(-1)
 
         return title_dist * 1 \
-               + sum(artist_dists) * 4 \
+               + sum(artist_dists) * 2 \
                + album_dist * 1

@@ -55,7 +55,21 @@ class BaseTrack(ABC):
             raise ValueError(f"artists cannot be empty in {self}")
 
     def _split_and_add_extra_artists(self, extra_artists: str) -> None:
-        extra_artists = extra_artists.strip().split(", ")
+        for artist in self._split_artists(extra_artists):
+            if artist not in self.artists:
+                self.artists.append(artist)
+
+    @staticmethod
+    def _split_artists(artists: str | list[str]) -> list[str]:
+        if isinstance(artists, list):
+            extra_artists = []
+            for artist in artists:
+                for split_artist in YtMusicTrack._split_artists(artist):
+                    if split_artist not in extra_artists:
+                        extra_artists.append(split_artist)
+            return extra_artists
+
+        extra_artists = artists.strip().split(", ")
 
         for i in range(len(extra_artists)):
             if " & " in extra_artists[i]:
@@ -67,17 +81,15 @@ class BaseTrack(ABC):
                 tmp = extra_artists[i].split(" x ")
                 extra_artists[i] = tmp.pop(0)
                 extra_artists += tmp
-        
-        for artist in extra_artists:
-            if artist not in self.artists:
-                self.artists.append(artist)
+
+        return extra_artists
 
 @dataclass
 class SpotifyTrack(BaseTrack):
     @staticmethod
     def from_response(response) -> SpotifyTrack | None:
         return SpotifyTrack(title=response["name"],
-                            artists=[item["name"] for item in response['artists']],
+                            artists=YtMusicTrack._split_artists([item["name"] for item in response['artists']]),
                             album=response["album"]["name"])
 
 @dataclass
@@ -96,9 +108,9 @@ class YtMusicTrack(BaseTrack):
         if len(artists) == 0:
             if os.path.isfile("oauth.json"):
                 album_res = YTMusic("oauth.json").get_album(response["album"]["id"])
-                artists = album_res["artists"][0]["name"].split(", ")
+                artists = album_res["artists"][0]["name"]
 
         return YtMusicTrack(title=response["title"],
-                            artists=artists,
+                            artists=YtMusicTrack._split_artists(artists),
                             album=response["album"]["name"],
                             video_id=response["videoId"])
